@@ -2,56 +2,49 @@ using UnityEngine;
 using Valve.VR.InteractionSystem;
 
 [RequireComponent(typeof(Interactable))]
+[RequireComponent(typeof(Rigidbody))]
 public class MachineSlide : MonoBehaviour
 {
-    [Header("Границы движения")]
     public Transform startPoint;
     public Transform endPoint;
 
     private Interactable interactable;
-    private Hand grabbingHand; // Какая рука схватила
+    private Rigidbody rb;
 
     void Start()
     {
         interactable = GetComponent<Interactable>();
-        
-        // Подписываемся на события захвата и отпускания
-        interactable.onAttachedToHand += OnGrab;
-        interactable.onDetachedFromHand += OnRelease;
+        rb = GetComponent<Rigidbody>();
     }
 
-    private void OnGrab(Hand hand)
+    void FixedUpdate()
     {
-        grabbingHand = hand;
-    }
-
-    private void OnRelease(Hand hand)
-    {
-        grabbingHand = null;
-    }
-
-    void Update()
-    {
-        // Если предмет в руке, двигаем его
-        if (grabbingHand != null)
+        // Если мы схватили объект рукой
+        if (interactable.attachedToHand != null)
         {
-            // Вычисляем линию движения от Start до End
-            Vector3 direction = endPoint.position - startPoint.position;
-            float maxDistance = direction.magnitude;
-            direction.Normalize();
+            Hand hand = interactable.attachedToHand;
+            
+            // Вычисляем направление от Start до End
+            Vector3 direction = (endPoint.position - startPoint.position).normalized;
+            float maxDistance = Vector3.Distance(startPoint.position, endPoint.position);
 
-            // Берем позицию руки и проецируем её на нашу линию
-            Vector3 handPos = grabbingHand.transform.position;
+            // Берем позицию руки
+            Vector3 handPos = hand.transform.position;
+
+            // Проецируем позицию руки на нашу линию движения
             Vector3 projectedPos = startPoint.position + Vector3.Project(handPos - startPoint.position, direction);
 
-            // Считаем расстояние от Start до спроецированной точки
+            // Считаем расстояние от старта
             float distanceFromStart = Vector3.Dot(projectedPos - startPoint.position, direction);
 
-            // Ограничиваем (Clamp) это расстояние, чтобы не выехать за Start и End
+            // Ограничиваем расстояние, чтобы не уехать за Start или End
             distanceFromStart = Mathf.Clamp(distanceFromStart, 0f, maxDistance);
 
-            // Применяем новую позицию
-            transform.position = startPoint.position + direction * distanceFromStart;
+            // Новая позиция
+            Vector3 newPosition = startPoint.position + direction * distanceFromStart;
+
+            // Двигаем Rigidbody (так как Is Kinematic включен, это сработает отлично)
+            rb.MovePosition(newPosition);
         }
     }
 }
