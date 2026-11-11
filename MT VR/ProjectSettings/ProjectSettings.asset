@@ -927,8 +927,8 @@ PlayerSettings:
   cloudProjectId: 6b3e0361-6c63-4e76-aff3-5c6463aad7a7
   framebufferDepthMemorylessMode: 0
   qualitySettingsNames: []
-  projectName: Döda
-  organizationId: ca943aea-24c8-4f9f-0000-11407504e55d
+  projectName: "D\xF6da"
+  organizationId: tagirsharipov01
   cloudEnabled: 0
   legacyClampBlendShapeWeights: 0
   hmiLoadingImage: {fileID: 0}
