@@ -7,17 +7,21 @@ using UnityEngine.Networking;
 
 public class CncJsonController : MonoBehaviour
 {
+    [Header("Настройки API")]
     public string url = "https://cnc.kovalev.team/get/3";
+    public string postUrl = "https://cnc.kovalev.team/post/3"; // Ссылка для кнопок
     public int channel = 1;
     public float interval = 0.5f;
 
+    [Header("Узлы станка")]
     public Transform nodeX;
     public Transform nodeY;
     public Transform nodeZ;
 
-    private Vector3 startX;
-    private Vector3 startY;
-    private Vector3 startZ;
+    [Header("Панель интерфейса")]
+    public MachinePanel panel; // Сюда перетащишь свой Canvas
+
+    private Vector3 startX, startY, startZ;
 
     private IEnumerator Start()
     {
@@ -47,11 +51,13 @@ public class CncJsonController : MonoBehaviour
                     catch (Exception error)
                     {
                         Debug.LogWarning("Ошибка чтения JSON: " + error.Message);
+                        if (panel != null) panel.ShowMessage("Ошибка JSON");
                     }
                 }
                 else
                 {
                     Debug.LogWarning($"Ошибка запроса: {request.responseCode} {request.error}");
+                    if (panel != null) panel.ShowMessage("Нет связи");
                 }
             }
 
@@ -63,43 +69,43 @@ public class CncJsonController : MonoBehaviour
     {
         JObject data = JObject.Parse(json);
 
-        float x = GetCoordinate(data, "X") * 0.001f;
-        float y = GetCoordinate(data, "Y") * 0.001f;
-        float z = GetCoordinate(data, "Z") * 0.001f;
+        // Получаем координаты в миллиметрах
+        float xMm = GetCoordinate(data, "X");
+        float yMm = GetCoordinate(data, "Y");
+        float zMm = GetCoordinate(data, "Z");
 
-        nodeX.localPosition = startX + Vector3.right * x;
-        nodeY.localPosition = startY + Vector3.forward * y;
-        nodeZ.localPosition = startZ + Vector3.up * z;
+        // Двигаем 3D модель (переводим в метры)
+        nodeX.localPosition = startX + Vector3.right * (xMm * 0.001f);
+        nodeY.localPosition = startY + Vector3.forward * (yMm * 0.001f);
+        nodeZ.localPosition = startZ + Vector3.up * (zMm * 0.001f);
+
+        // Обновляем текст на панели (передаем миллиметры!)
+        if (panel != null)
+        {
+            panel.ShowState(xMm, yMm, zMm, true);
+            panel.ShowMessage("Связь ОК");
+        }
     }
 
     private float GetCoordinate(JObject data, string axis)
     {
         JToken sections = data["data"];
-        if (sections == null)
-            throw new FormatException("В JSON нет раздела data");
+        if (sections == null) throw new FormatException("В JSON нет раздела data");
 
         string channelName = "Оси Канала " + channel;
         string axisName = "Перемещение по оси " + axis;
 
         foreach (JToken section in sections)
         {
-            if (section == null || section.Type != JTokenType.Array)
-                continue;
-
-            if (!string.Equals((string)section[0], channelName, StringComparison.OrdinalIgnoreCase))
-                continue;
+            if (section == null || section.Type != JTokenType.Array) continue;
+            if (!string.Equals((string)section[0], channelName, StringComparison.OrdinalIgnoreCase)) continue;
 
             foreach (JToken row in section[1])
             {
-                if (row == null || row.Type != JTokenType.Array)
-                    continue;
+                if (row == null || row.Type != JTokenType.Array) continue;
+                if (!string.Equals((string)row[0], axisName, StringComparison.OrdinalIgnoreCase)) continue;
 
-                if (!string.Equals((string)row[0], axisName, StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                string text = ((string)row[1]).Replace("мм", "").Trim();
-                text = text.Replace(',', '.');
-
+                string text = ((string)row[1]).Replace("мм", "").Trim().Replace(',', '.');
                 float value = float.Parse(text, CultureInfo.InvariantCulture);
 
                 if (float.IsNaN(value) || float.IsInfinity(value))
@@ -108,7 +114,45 @@ public class CncJsonController : MonoBehaviour
                 return value;
             }
         }
-
         throw new FormatException("Не найдена координата " + axis);
+    }
+
+    // --- МЕТОДЫ ДЛЯ КНОПОК ---
+    public void StartMachine()
+    {
+        StartCoroutine(SendCommand("start"));
+    }
+
+    public void StopMachine()
+    {
+        StartCoroutine(SendCommand("stop"));
+    }
+
+    private IEnumerator SendCommand(string command)
+    {
+        if (panel != null) panel.ShowMessage("Отправка команды...");
+        
+        string jsonPayload = "{\"command\":\"" + command + "\"}";
+        
+        using (UnityWebRequest request = new UnityWebRequest(postUrl, "POST"))
+        {
+            byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(jsonPayload);
+            request.uploadHandler = new UploadHandlerRaw(bodyRaw);
+            request.downloadHandler = new DownloadHandlerBuffer();
+            request.SetRequestHeader("Content-Type", "application/json");
+
+            yield return request.SendWebRequest();
+
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                if (panel != null) panel.ShowMessage("Ошибка команды: " + request.error);
+                Debug.LogError("Ошибка POST: " + request.error);
+            }
+            else
+            {
+                if (panel != null) panel.ShowMessage("Команда принята");
+                Debug.Log("Команда " + command + " успешно отправлена!");
+            }
+        }
     }
 }
