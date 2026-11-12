@@ -9,7 +9,7 @@ public class CncJsonController : MonoBehaviour
 {
     [Header("Настройки API")]
     public string url = "https://cnc.kovalev.team/get/3";
-    public string postUrl = "https://cnc.kovalev.team/post/3"; // Ссылка для кнопок
+    public string postUrl = "https://cnc.kovalev.team/post/3"; 
     public int channel = 1;
     public float interval = 0.5f;
 
@@ -19,9 +19,10 @@ public class CncJsonController : MonoBehaviour
     public Transform nodeZ;
 
     [Header("Панель интерфейса")]
-    public MachinePanel panel; // Сюда перетащишь свой Canvas
+    public MachinePanel panel; 
 
     private Vector3 startX, startY, startZ;
+    private bool isMachineRunning = false; // Новая переменная для хранения статуса
 
     private IEnumerator Start()
     {
@@ -69,20 +70,18 @@ public class CncJsonController : MonoBehaviour
     {
         JObject data = JObject.Parse(json);
 
-        // Получаем координаты в миллиметрах
         float xMm = GetCoordinate(data, "X");
         float yMm = GetCoordinate(data, "Y");
         float zMm = GetCoordinate(data, "Z");
 
-        // Двигаем 3D модель (переводим в метры)
         nodeX.localPosition = startX + Vector3.right * (xMm * 0.001f);
         nodeY.localPosition = startY + Vector3.forward * (yMm * 0.001f);
         nodeZ.localPosition = startZ + Vector3.up * (zMm * 0.001f);
 
-        // Обновляем текст на панели (передаем миллиметры!)
         if (panel != null)
         {
-            panel.ShowState(xMm, yMm, zMm, true);
+            // ТЕПЕРЬ ПЕРЕДАЕМ ПЕРЕМЕННУЮ isMachineRunning, А НЕ ЖЕСТКОЕ TRUE
+            panel.ShowState(xMm, yMm, zMm, isMachineRunning); 
             panel.ShowMessage("Связь ОК");
         }
     }
@@ -120,14 +119,19 @@ public class CncJsonController : MonoBehaviour
     // --- МЕТОДЫ ДЛЯ КНОПОК ---
     public void StartMachine()
     {
+        isMachineRunning = true; // Запоминаем, что нажали старт
+        if (panel != null) panel.SetState(true); 
         StartCoroutine(SendCommand("start"));
     }
 
     public void StopMachine()
     {
+        isMachineRunning = false; // Запоминаем, что нажали стоп
+        if (panel != null) panel.SetState(false); 
         StartCoroutine(SendCommand("stop"));
     }
 
+    // ТОТ САМЫЙ ПОТЕРЯВШИЙСЯ МЕТОД ОТПРАВКИ POST-ЗАПРОСА
     private IEnumerator SendCommand(string command)
     {
         if (panel != null) panel.ShowMessage("Отправка команды...");
@@ -145,7 +149,7 @@ public class CncJsonController : MonoBehaviour
 
             if (request.result != UnityWebRequest.Result.Success)
             {
-                if (panel != null) panel.ShowMessage("Ошибка команды: " + request.error);
+                if (panel != null) panel.ShowMessage("Ошибка: " + request.error);
                 Debug.LogError("Ошибка POST: " + request.error);
             }
             else
